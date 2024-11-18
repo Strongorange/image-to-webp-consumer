@@ -54,7 +54,7 @@ class ImageConversionService {
   public generateOutputPath(inputPath: string): string {
     const dir = path.dirname(inputPath);
     const filename = path.basename(inputPath, path.extname(inputPath));
-    return path.join(dir, `${filename}.webp`);
+    return path.resolve(dir, `${filename}.webp`);
   }
 
   public async deleteFile(filePath: string): Promise<void> {
