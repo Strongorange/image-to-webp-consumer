@@ -3,14 +3,23 @@ dotenv.config();
 import "tsconfig-paths/register";
 import RabbitMqConnection from "@/models/RabbitMqConnection";
 import ImageConversionService from "./services/ImageConversionService";
+import RedisConnection from "./models/RedisConnection";
 
 const QUEUE_NAME = "image_conversion";
 const imageService = new ImageConversionService();
 
 const processMessage = async (message: string) => {
+  let jobId = "";
   try {
     const job = JSON.parse(message);
+    jobId = job.id;
     console.log("받은 Job:", job);
+
+    // Redis 작업 상태 업데이트
+    await RedisConnection.set(
+      `job:${job.id}`,
+      JSON.stringify({ ...job, status: "processing" })
+    );
 
     const outputPath = imageService.generateOutputPath(job.path);
     const convertedImagePath = await imageService.convertToWebP(
@@ -31,11 +40,33 @@ const processMessage = async (message: string) => {
     );
 
     // 여기에 변환된 이미지 경로를 데이터베이스에 저장하거나 다른 처리를 추가할 수 있습니다.
+    await RedisConnection.set(
+      `job:${job.id}`,
+      JSON.stringify({
+        ...job,
+        status: "completed",
+        result: {
+          path: convertedImagePath,
+          convertedInfo,
+        },
+      })
+    );
 
     // 원본 이미지 삭제 (선택적)
     // await imageService.deleteFile(job.path);
   } catch (error) {
     console.error("메세지 처리중 에러:", error);
+    if (jobId) {
+      const jobDataRaw = await RedisConnection.get(`job:${jobId}`);
+      if (jobDataRaw) {
+        const jobData = JSON.parse(jobDataRaw);
+        await RedisConnection.set(`job:${jobId}`, {
+          ...jobData,
+          status: "failed",
+          error: (error as Error).message,
+        });
+      }
+    }
   }
 };
 
@@ -53,6 +84,7 @@ const main = async () => {
     process.on("SIGINT", async () => {
       console.log("Closing RabbitMQ connection");
       await RabbitMqConnection.close();
+      await RedisConnection.close();
       process.exit(0);
     });
   } catch (error) {

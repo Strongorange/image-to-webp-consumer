@@ -7,6 +7,7 @@
     "@types/amqplib": "^0.10.5",
     "amqplib": "^0.10.4",
     "dotenv": "^16.4.5",
+    "ioredis": "^5.4.1",
     "sharp": "^0.33.5",
     "tsconfig-paths": "^4.2.0"
   },
